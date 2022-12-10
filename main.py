@@ -4,6 +4,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.dispatcher import FSMContext
 
 API_TOKEN = '5649458393:AAHgc8zf-IIXjyu7RQaCy7NBwu4HpUXvpRQ'
 
@@ -58,20 +59,20 @@ for unit_id in range(count_units):
     keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
 
 
-@dp.message_handler(commands=['unit_workmates'])
+@dp.message_handler(commands='unit_workmates')
 async def units_id(message: types.Message):
     await Form.unit_workmates.set()
     await message.reply("choose needed unit", reply_markup=keyboard_inline)
 
 
-@dp.message_handler(commands=['table'])
+@dp.message_handler(commands='table')
 async def units_id(message: types.Message):
     await Form.table.set()
     await message.reply("choose needed unit", reply_markup=keyboard_inline)
 
 
 @dp.callback_query_handler(state=Form.unit_workmates)
-async def unit_workmates(call: types.CallbackQuery):
+async def unit_workmates(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(f"workmates of unit {str(call.data)}")
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
@@ -81,15 +82,18 @@ async def unit_workmates(call: types.CallbackQuery):
             my_result = my_cursor.fetchall()
             for row in my_result:
                 await call.message.answer(row)
+    await state.finish()
 
 
 @dp.callback_query_handler(state=Form.table)
-async def table(call: types.CallbackQuery):
+async def table(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer(f'unit #{str(call.data)}')
+    await call.message.answer('month ')
+    await call.message.answer('count workmates ')
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
-            await call.message.answer(f'unit #{str(id)}')
-            await call.message.answer('month ')
-            await call.message.answer('count workmates ')
+            pass
+    await state.finish()
 
 
 # @dp.callback_query_handler(text=["unit_1", "unit_2", "unit_3"])
