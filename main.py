@@ -1,25 +1,111 @@
-# import db
+import db
 import logging
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher.filters.state import State, StatesGroup
 
 API_TOKEN = '5649458393:AAHgc8zf-IIXjyu7RQaCy7NBwu4HpUXvpRQ'
 
 bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage = storage)
 logging.basicConfig(level=logging.INFO)
 
+my_cursor = db.mydb.cursor()
 
-@dp.message_handler(commands="test1")
-async def cmd_test1(message: types.Message):
-    await message.reply("my first test!")
+
+# States
+class Form(StatesGroup):
+    name = State()  # Will be represented in storage as 'Form:name'
+    table = State()
+    unit_workmates = State()
+
+
+@dp.message_handler(commands="start")
+async def start(message: types.Message):
+    await Form.name.set()
+    await message.answer("Good afternoon. I will help you with information about workmates in your office")
+
+
+@dp.message_handler(commands="workmates")
+async def workmates(message: types.Message):
+    sql = 'SELECT * FROM workmate'
+    my_cursor.execute(sql)
+    my_result = my_cursor.fetchall()
+    for row in my_result:
+        await message.answer(row)
+
+
+@dp.message_handler(commands="units")
+async def units(message: types.Message):
+    sql = 'SELECT * FROM unit'
+    my_cursor.execute(sql)
+    my_result = my_cursor.fetchall()
+    for row in my_result:
+        await message.answer(row)
+
+# create inline keyboard with dynamic count of units for show workmates
+my_cursor.execute('SELECT * FROM unit')
+units_data = my_cursor.fetchall()
+count_units = len(units_data)
+
+buttons = []
+keyboard_inline = InlineKeyboardMarkup()
+for unit_id in range(count_units):
+    number = unit_id + 1
+    buttons.append(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
+    keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
+
+
+@dp.message_handler(commands=['unit_workmates'])
+async def units_id(message: types.Message):
+    await Form.unit_workmates.set()
+    await message.reply("choose needed unit", reply_markup=keyboard_inline)
+
+
+@dp.message_handler(commands=['table'])
+async def units_id(message: types.Message):
+    await Form.table.set()
+    await message.reply("choose needed unit", reply_markup=keyboard_inline)
+
+
+@dp.callback_query_handler(state=Form.unit_workmates)
+async def unit_workmates(call: types.CallbackQuery):
+    await call.message.answer(f"workmates of unit {str(call.data)}")
+    for id in range(count_units):
+        if call.data == buttons[id].callback_data:
+            needed_unit_id = id + 1
+            sql = f'SELECT * FROM workmate WHERE unit_id = {needed_unit_id}'
+            my_cursor.execute(sql)
+            my_result = my_cursor.fetchall()
+            for row in my_result:
+                await call.message.answer(row)
+
+
+@dp.callback_query_handler(state=Form.table)
+async def table(call: types.CallbackQuery):
+    for id in range(count_units):
+        if call.data == buttons[id].callback_data:
+            await call.message.answer(f'unit #{str(id)}')
+            await call.message.answer('month ')
+            await call.message.answer('count workmates ')
+
+
+# @dp.callback_query_handler(text=["unit_1", "unit_2", "unit_3"])
+# async def unit_workmates_absenteeism(call: types.CallbackQuery):
+#     for id in range(count_units):
+#         if call.data == buttons[id].callback_data:
+#             needed_unit_id = id + 1
+#             sql = f'SELECT * FROM workmate WHERE unit_id = {needed_unit_id}'
+#             my_cursor.execute(sql)
+#             my_result = my_cursor.fetchall()
+#             for row in my_result:
+#                 await call.message.answer(row)
+
 
 executor.start_polling(dp, skip_updates=True)
 
-
-
-
-
-# my_cursor = db.mydb.cursor()
 
 # sql = 'UPDATE workmate SET age = 20 WHERE id_workmate<13'
 # my_cursor.execute(sql)
@@ -29,22 +115,6 @@ executor.start_polling(dp, skip_updates=True)
 # result = my_cursor.fetchall()
 # for row in result:
 #     print(row)
-
-# print WORKMATES how to change unit_id
-# unit_id = '1'
-# sql = 'SELECT * FROM workmate WHERE unit_id = %s'
-# my_cursor.execute(sql, unit_id)
-# my_result = my_cursor.fetchall()
-# print("workmate_id: surname name unit_id age")
-# for row in my_result:
-#     print(row)
-
-# print UNITS
-# my_cursor.execute('SELECT * FROM unit')
-# my_result = my_cursor.fetchall()
-# print("unit_id: count_workmates")
-# for row in my_result:
-#     print(row[0], ": ", row[1])
 
 # insert MONTH
 # sqlFormula = "INSERT INTO month (month_name, month_number, count_days, count_work_days) VALUES (%s, %s, %s, %s);"
@@ -60,6 +130,5 @@ executor.start_polling(dp, skip_updates=True)
 
 # show all tables in db
 # my_cursor.execute('SHOW TABLES')
-#
 # for db in my_cursor:
 #     print(db)
