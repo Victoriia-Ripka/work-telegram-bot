@@ -28,13 +28,54 @@ async def start(message: types.Message):
     await message.answer("Good afternoon. I will help you with information about workmates in your office")
 
 
+# Function that creates a message the contains a list of all the oders
+def message_select_workmates(ans):
+    text = ""
+    for row in ans:
+        id = row[0]
+        name = row[1]
+        surname = row[2]
+        unit_id = row[3]
+        age = row[4]
+        text += str(id) + " | " + str(name) + " | " + str(surname) + "| " + str(unit_id) + "| " + str(age) + "\n"
+    message = """Received 📖 Information about workmates:\nid | name | surname | unit_id | age \n\n"""+text
+    return message
+
+
+def message_select_units(ans):
+    text = ""
+    for row in ans:
+        id = row[0]
+        count_workmates = row[1]
+        text += str(id) + " | " + str(count_workmates) + "\n"
+    message = """Received 📖 Information about workmates:\nid | count workmates\n\n"""+text
+    return message
+
+
+def message_select_table(ans):
+    text = ""
+    for row in ans:
+        id = row[0]
+        name = row[1]
+        surname = row[2]
+        sick = row[3]
+        days_worked = row[4]
+        text += str(id) + " | " + str(name) + " | " + str(surname) + "| " + str(sick) + "| " + str(days_worked) + "\n"
+    message = """Received 📖 Information about workmates:\nid | name | surname | sick days | days worked \n\n"""+text
+    return message
+
+
 @dp.message_handler(commands="workmates")
 async def workmates(message: types.Message):
     sql = 'SELECT * FROM workmate'
     my_cursor.execute(sql)
     my_result = my_cursor.fetchall()
-    for row in my_result:
-        await message.answer(row)
+    if my_result:
+        testo_messaggio = message_select_workmates(my_result)
+        await message.answer(testo_messaggio)
+    else:
+        text = "No workmates found inside the database."
+        await message.answer(text)
 
 
 @dp.message_handler(commands="units")
@@ -42,8 +83,12 @@ async def units(message: types.Message):
     sql = 'SELECT * FROM unit'
     my_cursor.execute(sql)
     my_result = my_cursor.fetchall()
-    for row in my_result:
-        await message.answer(row)
+    if my_result:
+        testo_messaggio = message_select_units(my_result)
+        await message.answer(testo_messaggio)
+    else:
+        text = "No units found inside the database."
+        await message.answer(text)
 
 # create inline keyboard with dynamic count of units for show workmates
 my_cursor.execute('SELECT * FROM unit')
@@ -85,8 +130,12 @@ async def unit_workmates(call: types.CallbackQuery, state: FSMContext):
             sql = f'SELECT * FROM workmate WHERE unit_id = {needed_unit_id}'
             my_cursor.execute(sql)
             my_result = my_cursor.fetchall()
-            for row in my_result:
-                await call.message.answer(row)
+            if my_result:
+                testo_messaggio = message_select_workmates(my_result)
+                await call.message.answer(testo_messaggio)
+            else:
+                text = "No workmates found inside the database."
+                await call.message.answer(text)
     await state.finish()
 
 
@@ -97,20 +146,22 @@ async def table(call: types.CallbackQuery, state: FSMContext):
     my_cursor.execute('SELECT month_name FROM mydb.month WHERE month_number = 1')
     month = my_cursor.fetchall()
     await call.message.answer(f'{str(call.data)}')
-    await call.message.answer(f'month {month}')
-    await call.message.answer(f'count work days {count_work_days}')
+    await call.message.answer(f'month {str(month[0][0])}')
+    await call.message.answer(f'count work days {str(count_work_days[0][0])}')
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
             my_cursor.execute(f"""SELECT id_workmate, name, surname, (SELECT count_days_disease FROM mydb.sick_document
             WHERE mydb.workmate.id_workmate = mydb.sick_document.workmate_id_workmate) sick_days,
-            (SELECT (SELECT count_work_days FROM mydb.month WHERE month_number=1) - count_days_disease FROM mydb.sick_document 
-			WHERE mydb.workmate.id_workmate = mydb.sick_document.workmate_id_workmate) number_days_worked
-            FROM mydb.workmate
-            WHERE unit_id=1""")
+            (SELECT (SELECT count_work_days FROM mydb.month WHERE month_number=1) - count_days_disease 
+            FROM mydb.sick_document WHERE mydb.workmate.id_workmate = mydb.sick_document.workmate_id_workmate) 
+            number_days_worked FROM mydb.workmate WHERE unit_id={id+1}""")
             data = my_cursor.fetchall()
-            # print(data)
-            for row in data:
-                await call.message.answer(row)
+            if data:
+                testo_messaggio = message_select_table(data)
+                await call.message.answer(testo_messaggio)
+            else:
+                text = "No workmates found inside the database."
+                await call.message.answer(text)
     await state.finish()
 
 
@@ -122,31 +173,77 @@ async def unit_info_absenteeism(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
 
-executor.start_polling(dp, skip_updates=True)
+if __name__ == '__main__':
+    try:
+        print("Initializing Database...")
+        # my_cursor = db.mydb.cursor()
+        print("Connected to the database")
 
+        # Command that creates the "oders" table
+        sql_command = """CREATE DATABASE IF NOT EXISTS `mydb` DEFAULT CHARACTER SET utf8 ;"""
+        my_cursor.execute(sql_command)
+        sql_command = """CREATE TABLE IF NOT EXISTS `mydb`.`unit` (
+                        `id` INT NOT NULL AUTO_INCREMENT,
+                        `count_workmates` INT NULL,
+                        PRIMARY KEY (`id`),
+                        UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE);"""
+        my_cursor.execute(sql_command)
+        sql_command = """CREATE TABLE IF NOT EXISTS `mydb`.`workmate` (
+                        `id_workmate` INT NOT NULL AUTO_INCREMENT,
+                        `surname` VARCHAR(45) NOT NULL,
+                        `name` VARCHAR(45) NOT NULL,
+                        `unit_id` INT NOT NULL,
+                        PRIMARY KEY (`id_workmate`, `unit_id`),
+                        UNIQUE INDEX `id_workmate_UNIQUE` (`id_workmate` ASC) VISIBLE,
+                        INDEX `fk_workmate_unit_idx` (`unit_id` ASC) VISIBLE,
+                        CONSTRAINT `fk_workmate_unit`
+                        FOREIGN KEY (`unit_id`)
+                        REFERENCES `mydb`.`unit` (`id`)
+                        ON UPDATE CASCADE);"""
+        my_cursor.execute(sql_command)
+        sql_command = """CREATE TABLE IF NOT EXISTS `mydb`.`month` (
+                         `month_name` VARCHAR(45) NOT NULL,
+                         `month_number` INT NOT NULL,
+                         `count_days` INT NOT NULL,
+                         `count_work_days` INT NOT NULL,
+                         UNIQUE INDEX `month_name_UNIQUE` (`month_name` ASC) VISIBLE,
+                         PRIMARY KEY (`month_number`));"""
+        my_cursor.execute(sql_command)
+        sql_command = """CREATE TABLE IF NOT EXISTS `mydb`.`table` (
+                         `id` INT NOT NULL AUTO_INCREMENT,
+                          `unit_id` INT NOT NULL,
+                          `month_month_number` INT NOT NULL,
+                          PRIMARY KEY (`id`, `month_month_number`, `unit_id`),
+                          UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE,
+                          INDEX `fk_table_unit1_idx` (`unit_id` ASC) VISIBLE,
+                          INDEX `fk_table_month1_idx` (`month_month_number` ASC) VISIBLE,
+                          CONSTRAINT `fk_table_unit1`
+                            FOREIGN KEY (`unit_id`)
+                            REFERENCES `mydb`.`unit` (`id`)
+                            ON UPDATE CASCADE,
+                          CONSTRAINT `fk_table_month1`
+                            FOREIGN KEY (`month_month_number`)
+                            REFERENCES `mydb`.`month` (`month_number`)
+                            ON UPDATE CASCADE);"""
+        my_cursor.execute(sql_command)
+        sql_command = """CREATE TABLE IF NOT EXISTS `mydb`.`sick_document` (
+                          `id` INT NOT NULL AUTO_INCREMENT,
+                          `beginning_disease` DATE NOT NULL,
+                          `end_disease` DATE NOT NULL,
+                          `count_days_disease` INT NOT NULL,
+                          `workmate_id_workmate` INT NOT NULL,
+                          PRIMARY KEY (`id`, `workmate_id_workmate`),
+                          UNIQUE INDEX `id_UNIQUE` (`id` ASC) VISIBLE,
+                          INDEX `fk_sick_document_workmate1_idx` (`workmate_id_workmate` ASC) VISIBLE,
+                          CONSTRAINT `fk_sick_document_workmate1`
+                            FOREIGN KEY (`workmate_id_workmate`)
+                            REFERENCES `mydb`.`workmate` (`id_workmate`)
+                            ON UPDATE CASCADE);"""
+        my_cursor.execute(sql_command)
+        print("All tables are ready")
 
-# sql = 'UPDATE workmate SET age = 20 WHERE id_workmate<13'
-# my_cursor.execute(sql)
-# mydb.commit()
-# sql = 'SELECT * FROM workmate'
-# my_cursor.execute(sql)
-# result = my_cursor.fetchall()
-# for row in result:
-#     print(row)
+        print("Bot Started")
+        executor.start_polling(dp, skip_updates=True)
 
-# insert MONTH
-# sqlFormula = "INSERT INTO month (month_name, month_number, count_days, count_work_days) VALUES (%s, %s, %s, %s);"
-# month = ('May', 5, 30, 20)
-# my_cursor.execute(sqlFormula, month)
-# mydb.commit()
-
-# (how to insert DEFAULT value?
-# sqlFormula = "INSERT INTO month (month_name, month_number, count_days, count_work_days) VALUES (%s, %s, %s, %s);"
-# workmates = [(), (), (), ...]
-# my_cursor.executemany(sqlFormula, workmates)
-# mydb.commit()
-
-# show all tables in db
-# my_cursor.execute('SHOW TABLES')
-# for db in my_cursor:
-#     print(db)
+    except Exception as error:
+        print('Cause: {}'.format(error))
