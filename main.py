@@ -1,5 +1,6 @@
 import db
 import logging
+from datetime import datetime
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
@@ -16,11 +17,10 @@ logging.basicConfig(level=logging.INFO)
 my_cursor = db.mydb.cursor()
 
 
-# States
 class Form(StatesGroup):
     table = State()
     unit_workmates = State()
-    sick = State()
+    unit_sickdoc = State()
     workmate = State()
     unit = State()
     sick_paper = State()
@@ -30,10 +30,6 @@ class Form(StatesGroup):
 async def start(message: types.Message):
     await message.answer("Good afternoon. I will help you with information about workmates in your office")
 
-
-######
-###### SELECT COMMAND
-######
 
 # Function that creates a message the contains a list of all the oders
 def message_select_workmates(ans):
@@ -74,6 +70,10 @@ def message_select_table(ans):
     \n\n""" + text
     return message
 
+######
+###### SELECT COMMANDS
+######
+
 
 @dp.message_handler(commands="workmates")
 async def workmates(message: types.Message):
@@ -113,22 +113,13 @@ for unit_id in range(count_units):
     buttons.append(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
     keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
 
+######
+###### SELECT COMMANDS for units
+######
 
 @dp.message_handler(commands='unit_workmates')
-async def units_id(message: types.Message):
+async def units_id_workmates(message: types.Message):
     await Form.unit_workmates.set()
-    await message.reply("choose needed unit", reply_markup=keyboard_inline)
-
-
-@dp.message_handler(commands='table')
-async def units_id(message: types.Message):
-    await Form.table.set()
-    await message.reply("choose needed unit", reply_markup=keyboard_inline)
-
-
-@dp.message_handler(commands='unit_sickdoc')
-async def unit_info_absenteeism(message: types.Message):
-    await Form.sick.set()
     await message.reply("choose needed unit", reply_markup=keyboard_inline)
 
 
@@ -148,6 +139,12 @@ async def unit_workmates(call: types.CallbackQuery, state: FSMContext):
                 text = "No workmates found inside the database."
                 await call.message.answer(text)
     await state.finish()
+
+
+@dp.message_handler(commands='table')
+async def units_id_table(message: types.Message):
+    await Form.table.set()
+    await message.reply("choose needed unit", reply_markup=keyboard_inline)
 
 
 @dp.callback_query_handler(state=Form.table)
@@ -179,8 +176,14 @@ async def table(call: types.CallbackQuery, state: FSMContext):
     await state.finish()
 
 
-@dp.callback_query_handler(state=Form.sick)
-async def unit_info_sick(call: types.CallbackQuery, state: FSMContext):
+@dp.message_handler(commands='unit_sickdoc')
+async def units_id_sickdoc(message: types.Message):
+    await Form.sick.set()
+    await message.reply("choose needed unit", reply_markup=keyboard_inline)
+
+
+@dp.callback_query_handler(state=Form.unit_sickdoc)
+async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
             await call.message.answer("there will be answer soon")
@@ -207,14 +210,19 @@ async def insert_workmate(message: types.Message):
 async def insert_workmate(message: types.Message, state: FSMContext):
 
     data_workmate = message.values["text"].split(" ")
-    surname = data_workmate[0].title()
-    name = data_workmate[1].title()
-    unit_id = int(data_workmate[2])
-    age = int(data_workmate[3])
+    try:
+        surname = data_workmate[0].title()
+        name = data_workmate[1].title()
+        unit_id = int(data_workmate[2])
+        age = int(data_workmate[3])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
 
     # Create the tuple "params" with all the parameters inserted by the user
     workmate = (surname, name, unit_id, age)
-    # CHECK DATA TYPE
     sql = "INSERT INTO workmate (id_workmate, surname, name, unit_id, age) VALUES (NULL, %s, %s, %s, %s);"
     # the initial NULL is for the AUTOINCREMENT id inside the table
     my_cursor.execute(sql, workmate)  # Execute the query
@@ -228,7 +236,7 @@ async def insert_workmate(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands='insert_unit')
-async def insert_workmate(message: types.Message):
+async def insert_unit(message: types.Message):
     try:
         await Form.unit.set()
         await message.answer("""INPUT\nunit title""")
@@ -240,28 +248,27 @@ async def insert_workmate(message: types.Message):
 
 
 @dp.message_handler(state=Form.unit)
-async def insert_workmate(message: types.Message, state: FSMContext):
+async def insert_unit(message: types.Message, state: FSMContext):
 
     unit_title = message.values["text"].strip().replace(" ", "_")
 
-    # CHECK DATA TYPE
-    # sql = "INSERT INTO unit (id, count_workmates, title) VALUES (NULL, NULL, %s);"
+    sql = "INSERT INTO unit (id, count_workmates, title) VALUES (NULL, 0, %s);"
     # the initial NULL is for the AUTOINCREMENT id inside the table
-    # my_cursor.execute(sql, unit_title)  # Execute the query
-    # db.mydb.commit()  # commit the changes
+    my_cursor.execute(sql, (unit_title, ))  # Execute the query
+    db.mydb.commit()  # commit the changes
     await state.finish()
 
     if my_cursor.rowcount < 1:
         await message.answer("Something went wrong, please try again")
     else:
-        await message.answer("Workmate correctly inserted")
+        await message.answer("Unit correctly inserted")
 
 
 @dp.message_handler(commands='insert_sick_paper')
 async def insert_workmate(message: types.Message):
     try:
-        await Form.workmate.set()
-        await message.answer("""INPUT\nsurname name unit_id age""")
+        await Form.sick_paper.set()
+        await message.answer("""INPUT\nbeginning_disease end_disease workmate's_id\n\n year-month-day\t2023-01-05""")
 
     except Exception as e:
         print(e)
@@ -273,16 +280,33 @@ async def insert_workmate(message: types.Message):
 async def insert_workmate(message: types.Message, state: FSMContext):
 
     data_workmate = message.values["text"].split(" ")
-    surname = data_workmate[0]
-    name = data_workmate[1]
-    unit_id = int(data_workmate[2])
-    age = int(data_workmate[3])
+    try:
+        beginning_disease = data_workmate[0]
+        end_disease = data_workmate[1]
+        beginning = beginning_disease.split('-')
+        year1 = int(beginning[0])
+        month1 = int(beginning[1])
+        day1 = int(beginning[2])
+        data1 = datetime(year1, month1, day1)
+        end = end_disease.split('-')
+        year2 = int(end[0])
+        month2 = int(end[1])
+        day2 = int(end[2])
+        data2 = datetime(year2, month2, day2)
+        count_days = data2 - data1
+        workmate_id = int(data_workmate[2])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
 
     # Create the tuple "params" with all the parameters inserted by the user
-    workmate = (surname, name, unit_id, age)
+    workmate = (beginning_disease, end_disease, count_days.days, workmate_id)
     # CHECK DATA TYPE
     print(workmate)
-    sql = "INSERT INTO workmate (id_workmate, surname, name, unit_id, age) VALUES (NULL, %s, %s, %s, %s);"
+    sql = "INSERT INTO sick_document (id, beginning_disease, end_disease, count_days_disease, workmate_id_workmate) " \
+          "VALUES (NULL, %s, %s, %s, %s);"
     # the initial NULL is for the AUTOINCREMENT id inside the table
     my_cursor.execute(sql, workmate)  # Execute the query
     db.mydb.commit()  # commit the changes
@@ -291,7 +315,7 @@ async def insert_workmate(message: types.Message, state: FSMContext):
     if my_cursor.rowcount < 1:
         await message.answer("Something went wrong, please try again")
     else:
-        await message.answer("Workmate correctly inserted")
+        await message.answer("Sick paper correctly inserted")
 
 if __name__ == '__main__':
     try:
