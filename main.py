@@ -22,6 +22,8 @@ class Form(StatesGroup):
     unit_workmates = State()
     sick = State()
     workmate = State()
+    unit = State()
+    sick_paper = State()
 
 
 @dp.message_handler(commands="start")
@@ -186,10 +188,9 @@ async def unit_info_sick(call: types.CallbackQuery, state: FSMContext):
 
 
 ######
-###### INSERT COMMAND
+###### INSERT COMMANDS
 ######
 
-# Insert command
 @dp.message_handler(commands='insert_workmate')
 async def insert_workmate(message: types.Message):
     try:
@@ -206,14 +207,14 @@ async def insert_workmate(message: types.Message):
 async def insert_workmate(message: types.Message, state: FSMContext):
 
     data_workmate = message.values["text"].split(" ")
-    surname = data_workmate[0]
-    name = data_workmate[1]
+    surname = data_workmate[0].title()
+    name = data_workmate[1].title()
     unit_id = int(data_workmate[2])
     age = int(data_workmate[3])
 
     # Create the tuple "params" with all the parameters inserted by the user
     workmate = (surname, name, unit_id, age)
-    print(workmate)
+    # CHECK DATA TYPE
     sql = "INSERT INTO workmate (id_workmate, surname, name, unit_id, age) VALUES (NULL, %s, %s, %s, %s);"
     # the initial NULL is for the AUTOINCREMENT id inside the table
     my_cursor.execute(sql, workmate)  # Execute the query
@@ -225,6 +226,72 @@ async def insert_workmate(message: types.Message, state: FSMContext):
     else:
         await message.answer("Workmate correctly inserted")
 
+
+@dp.message_handler(commands='insert_unit')
+async def insert_workmate(message: types.Message):
+    try:
+        await Form.unit.set()
+        await message.answer("""INPUT\nunit title""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.unit)
+async def insert_workmate(message: types.Message, state: FSMContext):
+
+    unit_title = message.values["text"].strip().replace(" ", "_")
+
+    # CHECK DATA TYPE
+    # sql = "INSERT INTO unit (id, count_workmates, title) VALUES (NULL, NULL, %s);"
+    # the initial NULL is for the AUTOINCREMENT id inside the table
+    # my_cursor.execute(sql, unit_title)  # Execute the query
+    # db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Workmate correctly inserted")
+
+
+@dp.message_handler(commands='insert_sick_paper')
+async def insert_workmate(message: types.Message):
+    try:
+        await Form.workmate.set()
+        await message.answer("""INPUT\nsurname name unit_id age""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.sick_paper)
+async def insert_workmate(message: types.Message, state: FSMContext):
+
+    data_workmate = message.values["text"].split(" ")
+    surname = data_workmate[0]
+    name = data_workmate[1]
+    unit_id = int(data_workmate[2])
+    age = int(data_workmate[3])
+
+    # Create the tuple "params" with all the parameters inserted by the user
+    workmate = (surname, name, unit_id, age)
+    # CHECK DATA TYPE
+    print(workmate)
+    sql = "INSERT INTO workmate (id_workmate, surname, name, unit_id, age) VALUES (NULL, %s, %s, %s, %s);"
+    # the initial NULL is for the AUTOINCREMENT id inside the table
+    my_cursor.execute(sql, workmate)  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Workmate correctly inserted")
 
 if __name__ == '__main__':
     try:
