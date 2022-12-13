@@ -27,6 +27,12 @@ class Form(StatesGroup):
     workmate = State()
     unit = State()
     sick_paper = State()
+    update_workmate = State()
+    update_unit = State()
+    update_sick_paper = State()
+    delete_workmate = State()
+    delete_unit = State()
+    delete_sick_paper = State()
 
 
 @dp.message_handler(commands="start")
@@ -36,12 +42,7 @@ async def start(message: types.Message):
 
 @dp.message_handler(commands="help")
 async def start(message: types.Message):
-    text = """I can help you manage database of workmates in you office. You always may use /help
-            to remind some commands\n\n/start - \n/help - \n\nORDINARY SELECT:\n/workmates - \n/units - 
-            \n/workmate - \n/unit_workmates - \n/table - \n/unit_sickdoc - \n\nINSERT COMMANDS:\n
-            /insert_workmate - \n/insert_unit - \n/insert_sick_paper - \n\nUPDATE COMMANDS:\n
-            /update_workmate - \n/update_unit - \n/update_sick_paper - \n\nDELETE COMMANDS:\n
-            /delete_workmate - \n/delete_unit - \n/delete_sick_paper - \n\n"""
+    text = """I can help you manage database of workmates in you office. You always may use /help to remind some commands\n\n/start - \n/help - \n\nORDINARY SELECT:\n/workmates - \n/units - \n/workmate - select with surname\n/unit_workmates - \n/table - \n/unit_sickdoc - \n\nINSERT COMMANDS:\n /insert_workmate - \n/insert_unit - \n/insert_sick_paper - \n\nUPDATE COMMANDS:\n /update_workmate - \n/update_unit - \n/update_sick_paper - \n\nDELETE COMMANDS:\n/delete_workmate - \n/delete_unit - \n/delete_sick_paper - \n\n"""
     await message.answer(text)
 
 
@@ -213,12 +214,16 @@ my_cursor.execute('SELECT * FROM unit')
 units_data = my_cursor.fetchall()
 count_units = len(units_data)
 
+# create inline keyboard with titles and unit's ids
 buttons = []
 keyboard_inline = InlineKeyboardMarkup()
 for unit_id in range(count_units):
     number = unit_id + 1
-    buttons.append(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
-    keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}', callback_data=f'unit_{number}'))
+    sql = f"SELECT title FROM mydb.unit where id = %s"
+    my_cursor.execute(sql, (number, ))
+    title = my_cursor.fetchone()
+    buttons.append(InlineKeyboardButton(text=f'unit {number}: {title[0]}', callback_data=f'unit_{number}'))
+    keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}: {title[0]}', callback_data=f'unit_{number}'))
 
 
 ######
@@ -265,15 +270,15 @@ async def table(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(f'month {str(month[0][0])}')
     await call.message.answer(f'count work days {str(count_work_days[0][0])}')
     for id in range(count_units):
+        unit_id = id + 1
         if call.data == buttons[id].callback_data:
-            my_cursor.execute(f"""SELECT id_workmate, name, surname, (SELECT (SELECT count_work_days FROM mydb.month WHERE month_number=1) - count_days_disease
-									FROM mydb.sick_document 
+            my_cursor.execute(f"""SELECT id_workmate, name, surname, (SELECT (SELECT count_work_days FROM mydb.month 
+                                    WHERE month_number=1) - count_days_disease FROM mydb.sick_document 
 									WHERE mydb.workmate.id_workmate = mydb.sick_document.workmate_id_workmate) number_days_worked,
                                     (SELECT count_days_disease FROM mydb.sick_document 
 									WHERE mydb.workmate.id_workmate = mydb.sick_document.workmate_id_workmate) sick_days,
                                     ( SELECT (SELECT count_work_days FROM mydb.month WHERE month_number=1) - number_days_worked - sick_days) absenteeism
-                                    FROM mydb.workmate
-                                    WHERE unit_id = 1""")
+                                    FROM mydb.workmate WHERE unit_id = {unit_id}""")
             data = my_cursor.fetchall()
             if data:
                 testo_messaggio = message_select_table(data)
@@ -292,9 +297,9 @@ async def units_id_sickdoc(message: types.Message):
 
 @dp.callback_query_handler(state=Form.unit_sickdoc)
 async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer(f'{str(call.data)}')
     my_cursor.execute('SELECT month_name FROM mydb.month WHERE month_number = 1')
     month = my_cursor.fetchall()
-    await call.message.answer(f'{str(call.data)}')
     await call.message.answer(f'month {str(month[0][0])}')
     for id in range(count_units):
         unit_id = id + 1
@@ -402,21 +407,14 @@ async def insert_workmate(message: types.Message, state: FSMContext):
         beginning_disease = data_workmate[0]
         end_disease = data_workmate[1]
         beginning = beginning_disease.split('-')
-        year1 = int(beginning[0])
-        month1 = int(beginning[1])
-        day1 = int(beginning[2])
-        data1 = datetime(year1, month1, day1)
+        data1 = datetime(int(beginning[0]), int(beginning[1]), int(beginning[2]))
         end = end_disease.split('-')
-        year2 = int(end[0])
-        month2 = int(end[1])
-        day2 = int(end[2])
-        data2 = datetime(year2, month2, day2)
+        data2 = datetime(int(end[0]), int(end[1]), int(end[2]))
         count_days = data2 - data1
         workmate_id = int(data_workmate[2])
     except ValueError:
         await state.finish()
         await message.answer("sorry, you input wrong data type. please, try again")
-        await Form.workmate.set()
         return
 
     # Create the tuple "params" with all the parameters inserted by the user
@@ -434,6 +432,238 @@ async def insert_workmate(message: types.Message, state: FSMContext):
         await message.answer("Something went wrong, please try again")
     else:
         await message.answer("Sick paper correctly inserted")
+
+
+######
+###### UPDATE COMMANDS
+######
+
+@dp.message_handler(commands='update_workmate')
+async def update_workmate(message: types.Message):
+    try:
+        await Form.update_workmate.set()
+        await message.answer("""INPUT new information about workmate\nid surname name unit_id age""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.update_workmate)
+async def update_workmate(message: types.Message, state: FSMContext):
+    data_workmate = message.values["text"].split(" ")
+    try:
+        id = int(data_workmate[0])
+        surname = data_workmate[1].title()
+        name = data_workmate[2].title()
+        unit_id = int(data_workmate[3])
+        age = int(data_workmate[4])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
+
+    # Create the tuple "params" with all the parameters inserted by the user
+    workmate = (surname, name, unit_id, age, id)
+    sql = "UPDATE workmate SET surname = %s, name = %s, unit_id = %s, age = %s WHERE id_workmate = %s;"
+    my_cursor.execute(sql, workmate)  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Workmate correctly updated")
+
+
+@dp.message_handler(commands='update_unit')
+async def update_unit(message: types.Message):
+    try:
+        await Form.update_unit.set()
+        await message.answer("""INPUT new information about unit\nid title""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.update_unit)
+async def update_unit(message: types.Message, state: FSMContext):
+    data_unit = message.values["text"].split(" ")
+    params = ()
+    try:
+        if len(data_unit) == 2:
+            id = int(data_unit[0])
+            title = data_unit[1]
+            params = (title, id)
+        else:
+            # unit_title = message.values["text"].strip().replace(" ", "_")
+            pass
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        # await message.answer("""INPUT new information about unit\nid title""")
+        return
+
+    sql = "UPDATE unit SET title = %s WHERE id = %s;"
+    my_cursor.execute(sql, params)  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Unit correctly updated")
+
+
+@dp.message_handler(commands='update_sick_paper')
+async def update_sick_paper(message: types.Message):
+    try:
+        await Form.update_sick_paper.set()
+        await message.answer("""INPUT new information\ndocument's_id beginning_disease end_disease\n\n year-month-day\t2023-01-05""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.update_sick_paper)
+async def update_sick_paper(message: types.Message, state: FSMContext):
+    data_workmate = message.values["text"].split(" ")
+    try:
+        id = int(data_workmate[0])
+        beginning_disease = data_workmate[1]
+        beginning = beginning_disease.split('-')
+        data1 = datetime(int(beginning[0]), int(beginning[1]), int(beginning[2]))
+        end_disease = data_workmate[2]
+        end = end_disease.split('-')
+        data2 = datetime(int(end[0]), int(end[1]), int(end[2]))
+        count_days = data2 - data1
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        return
+
+    data = (beginning_disease, end_disease, count_days.days, id)
+    sql = "UPDATE sick_document SET beginning_disease = %s, end_disease = %s, count_days_disease = %s  WHERE id = %s"
+    my_cursor.execute(sql, data)  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Unit correctly updated")
+
+
+######
+###### DELETE COMMANDS
+######
+
+@dp.message_handler(commands='delete_workmate')
+async def delete_workmate(message: types.Message):
+    try:
+        await Form.delete_workmate.set()
+        await message.answer("""INPUT\nid workmate""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.delete_workmate)
+async def delete_workmate(message: types.Message, state: FSMContext):
+    data_workmate = message.values["text"].split(" ")
+    try:
+        id = int(data_workmate[0])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
+
+    sql = "DELETE FROM workmate WHERE id_workmate = %s;"
+    my_cursor.execute(sql, (id, ))  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Workmate correctly deleted")
+
+
+@dp.message_handler(commands='delete_unit')
+async def delete_unit(message: types.Message):
+    try:
+        await Form.delete_unit.set()
+        await message.answer("""INPUT\nid unit""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.delete_unit)
+async def delete_unit(message: types.Message, state: FSMContext):
+    data_unit = message.values["text"].split(" ")
+    try:
+        id = int(data_unit[0])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
+
+    sql = "DELETE FROM unit WHERE id = %s;"
+    my_cursor.execute(sql, (id,))  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Unit correctly deleted")
+
+
+@dp.message_handler(commands='delete_sick_paper')
+async def delete_sick_paper(message: types.Message):
+    try:
+        await Form.delete_sick_paper.set()
+        await message.answer("""INPUT\ndocument's id""")
+
+    except Exception as e:
+        print(e)
+        await message.answer("Conversation Terminated✔")
+        return
+
+
+@dp.message_handler(state=Form.delete_sick_paper)
+async def delete_sick_paper(message: types.Message, state: FSMContext):
+    data_document = message.values["text"].split(" ")
+    try:
+        id = int(data_document[0])
+    except ValueError:
+        await state.finish()
+        await message.answer("sorry, you input wrong data type. please, try again")
+        await Form.workmate.set()
+        return
+
+    sql = "DELETE FROM sick_document WHERE id = %s;"
+    my_cursor.execute(sql, (id,))  # Execute the query
+    db.mydb.commit()  # commit the changes
+    await state.finish()
+
+    if my_cursor.rowcount < 1:
+        await message.answer("Something went wrong, please try again")
+    else:
+        await message.answer("Unit correctly updated")
 
 
 if __name__ == '__main__':
