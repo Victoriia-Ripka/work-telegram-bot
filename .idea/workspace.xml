@@ -5,6 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="68adf8f0-7f7d-46ab-879b-d0f052459458" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/sql_code.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
@@ -80,7 +81,12 @@
       <workItem from="1670688445801" duration="19557000" />
       <workItem from="1670748433612" duration="4613000" />
       <workItem from="1670840685282" duration="14292000" />
-      <workItem from="1670876432391" duration="18971000" />
+      <workItem from="1670876432391" duration="26963000" />
+      <workItem from="1671018415786" duration="5413000" />
+      <workItem from="1671114220550" duration="233000" />
+      <workItem from="1671365407456" duration="1568000" />
+      <workItem from="1671367175992" duration="2270000" />
+      <workItem from="1671440483803" duration="4595000" />
     </task>
     <servers />
   </component>
@@ -98,7 +104,28 @@
       </map>
     </option>
   </component>
+  <component name="XDebuggerManager">
+    <breakpoint-manager>
+      <breakpoints>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main.py</url>
+          <line>222</line>
+          <option name="timeStamp" value="3" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main.py</url>
+          <line>203</line>
+          <option name="timeStamp" value="4" />
+        </line-breakpoint>
+        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
+          <url>file://$PROJECT_DIR$/main.py</url>
+          <line>637</line>
+          <option name="timeStamp" value="9" />
+        </line-breakpoint>
+      </breakpoints>
+    </breakpoint-manager>
+  </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
-    <SUITE FILE_PATH="coverage/work_telegram_bot$main.coverage" NAME="main Coverage Results" MODIFIED="1670937818565" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+    <SUITE FILE_PATH="coverage/work_telegram_bot$main.coverage" NAME="main Coverage Results" MODIFIED="1671444958192" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="true" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
   </component>
 </project>

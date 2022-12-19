@@ -15,6 +15,7 @@ dp = Dispatcher(bot, storage=storage)
 logging.basicConfig(level=logging.INFO)
 
 my_cursor = db.mydb.cursor()
+currentMonth = datetime.now().month
 
 
 class Form(StatesGroup):
@@ -35,24 +36,54 @@ class Form(StatesGroup):
     delete_sick_paper = State()
 
 
+async def set_commands():
+    await dp.bot.set_my_commands(commands=[
+        types.BotCommand("start", "bot launch"),
+        types.BotCommand("help", "list of commands"),
+        types.BotCommand("workmates", "list of workmates"),
+        types.BotCommand("units", "list of units"),
+        types.BotCommand("workmate", "needed workmate"),
+        types.BotCommand("unit_workmates", "list of workmates in the unit"),
+        types.BotCommand("table", "table of unit"),
+        types.BotCommand("unit_sickdoc", "all sickdoc of unit"),
+        types.BotCommand("insert_workmate", ""),
+        types.BotCommand("insert_unit", ""),
+        types.BotCommand("insert_sick_paper", ""),
+        types.BotCommand("update_workmate", ""),
+        types.BotCommand("update_unit", ""),
+        types.BotCommand("update_sick_paper", ""),
+        types.BotCommand("delete_workmate", ""),
+        types.BotCommand("delete_unit", ""),
+        types.BotCommand("delete_sick_paper", ""),
+    ])
+
+
 @dp.message_handler(commands="start")
 async def start(message: types.Message):
-    await message.answer("Good afternoon. I will help you with information about workmates in your office")
+    await message.answer(f"Good afternoon. I will help you with information about workmates in your office.\n" \
+                         "Use /help to see all available commands.")
 
 
 @dp.message_handler(commands="help")
-async def start(message: types.Message):
-    text = """I can help you manage database of workmates in you office. You always may use /help to remind some commands\n\n/start - \n/help - \n\nORDINARY SELECT:\n/workmates - \n/units - \n/workmate - select with surname\n/unit_workmates - \n/table - \n/unit_sickdoc - \n\nINSERT COMMANDS:\n /insert_workmate - \n/insert_unit - \n/insert_sick_paper - \n\nUPDATE COMMANDS:\n /update_workmate - \n/update_unit - \n/update_sick_paper - \n\nDELETE COMMANDS:\n/delete_workmate - \n/delete_unit - \n/delete_sick_paper - \n\n"""
+async def help(message: types.Message):
+    text = f'I can help you manage database of workmates in your office.\n\n' \
+           '/start - bot launch, greetings\n/help - a list of all available commands and their ' \
+           'purpose \n\nORDINARY SELECT:\n/workmates – a list of all workmates in the office\n' \
+           '/units – a list of all units in the office\n/workmate – select one workmate with written surname or id\n' \
+           '/unit_workmates – a list of all workmates in the unit with choosen id\n/table – table of chosen unit\n' \
+           '/unit_sickdoc - \n\nINSERT COMMANDS:\n/insert_workmate\n/insert_unit\n/insert_sick_paper\n\n' \
+           'UPDATE COMMANDS:\n/update_workmate\n/update_unit\n/update_sick_paper\n\nDELETE COMMANDS:\n' \
+           '/delete_workmate\n/delete_unit\n/delete_sick_paper\n\n'
     await message.answer(text)
 
 
-# Function that creates a message the contains a list of all the oders
+# Function that creates a message the contains a list of all the workmates and etc
 def message_select_workmates(ans):
     text = ""
     for row in ans:
         id = row[0]
-        name = row[1]
-        surname = row[2]
+        surname = row[1]
+        name = row[2]
         unit_id = row[3]
         age = row[4]
         text += str(id) + " | " + str(name) + " | " + str(surname) + "| " + str(unit_id) + "| " + str(age) + "\n"
@@ -68,10 +99,10 @@ def message_select_workmate(ans):
         name = row[2]
         unit_id = row[3]
         age = row[4]
-        sick_days = row[5]
-        text += str(id) + ": " + str(name) + " " + str(surname) + "| " + str(unit_id) + "| " + str(age) + " | " + \
+        sick_days = 0 if row[5] is None else row[5]
+        text += str(id) + ": " + str(surname) + " " + str(name) + "| " + str(unit_id) + "| " + str(age) + " | " + \
                 str(sick_days) + "\n"
-    message = """Received 📖 Information about workmate:\nid: surname name | unit_id | age | sick days in this month
+    message = """Received 📖 Information about workmate:\nid: surname name | unit_id | age | sick days in current month
         \n\n""" + text
     return message
 
@@ -81,26 +112,39 @@ def message_select_units(ans):
     for row in ans:
         id = row[0]
         count_workmates = row[1]
-        text += str(id) + " | " + str(count_workmates) + "\n"
-    message = """Received 📖 Information about workmates:\nid | count workmates\n\n""" + text
+        title = row[2]
+        text += str(id) + " | " + str(title) + " | " + str(count_workmates) + "\n"
+    message = """Received 📖 Information about workmates:\nid | title | count workmates\n\n""" + text
     return message
 
 
 def message_select_table(ans):
     text = ""
+    my_cursor.execute(f'SELECT count_work_days FROM mydb.month WHERE month_number={currentMonth}')
+    worked_days = my_cursor.fetchone()[0]
     for row in ans:
         id = row[0]
         name = row[1]
         surname = row[2]
         days_worked = row[3]
-        sick = row[4]
-        absenteeism = row[5]
-        text += str(id) + " | " + str(name) + " | " + str(surname) + "| " + str(sick) + "| " + str(days_worked) + "| " \
-                + str(absenteeism) + "\n"
-    message = """Received 📖 Information about workmates:\nid | name | surname | sick days | days worked | absenteeism 
-    \n\n""" + text
+        if days_worked is None:
+            days_worked = worked_days
+
+        sick = 0 if row[4] is None else row[4]
+        text += str(id) + " | " + str(name) + " | " + str(surname) + "| " + str(sick) + "| " + str(days_worked) + "\n"
+    message = """Received 📖 Information about workmates:\nid | name | surname | sick days | days worked\n\n""" + text
     return message
 
+def message_select_workmates_sickdoc(ans):
+    text = ""
+    for row in ans:
+        id = row[0]
+        surname = row[1]
+        name = row[2]
+
+        text += str(id) + " | " + str(name) + " " + str(surname) + "\n"
+    message = """Received 📖 Information about workmates:\nid | name surname \n\n""" + text
+    return message
 
 ######
 ###### SELECT COMMANDS
@@ -130,7 +174,7 @@ async def select_workmate(call: types.CallbackQuery):
 async def select_workmate_id(message: types.Message, state: FSMContext):
     id_data = message.values["text"]
     try:
-        id = int(id_data[0])
+        id = int(id_data)
     except ValueError:
         await state.finish()
         await message.answer("sorry, you input wrong data type. please, try again")
@@ -138,11 +182,14 @@ async def select_workmate_id(message: types.Message, state: FSMContext):
         return
 
     sql = f'''SELECT *, (SELECT SUM(count_days_disease) sum 
-                FROM mydb.sick_document 
-                WHERE workmate_id_workmate={id}
-                group by workmate_id_workmate ) sick_days 
-                FROM mydb.workmate WHERE id_workmate = {id}'''
-    my_cursor.execute(sql, workmate)  # Execute the query
+                        FROM mydb.sick_document 
+                        WHERE workmate_id_workmate in (SELECT id_workmate 
+                                                    FROM mydb.workmate 
+                                                    WHERE id_workmate = {id}) 
+                                                    AND month_number={currentMonth}
+                        group by workmate_id_workmate ) sick_days 
+                        FROM mydb.workmate WHERE id_workmate = {id}'''
+    my_cursor.execute(sql)  # Execute the query
     data = my_cursor.fetchall()
     await state.finish()
     if data:
@@ -157,21 +204,23 @@ async def select_workmate_id(message: types.Message, state: FSMContext):
 async def select_workmate_surname(message: types.Message, state: FSMContext):
     id_data = message.values["text"]
     try:
-        surname = id_data
+        surname = id_data.title()
+        print(surname)
     except ValueError:
         await state.finish()
         await message.answer("sorry, you input wrong data type. please, try again")
         await message.answer("Choose needed type of search", reply_markup=keyboard_inline_workmate)
         return
-    # await message.answer("select_workmate_surname")
+
     sql = f'''SELECT *, (SELECT SUM(count_days_disease) sum 
                         FROM mydb.sick_document 
                         WHERE workmate_id_workmate in (SELECT id_workmate 
                                                     FROM mydb.workmate 
-                                                    WHERE surname = {surname})
+                                                    WHERE surname = {surname}) 
+                                                    AND month_number={currentMonth}
                         group by workmate_id_workmate ) sick_days 
                         FROM mydb.workmate WHERE surname = {surname}'''
-    my_cursor.execute(sql, surname)
+    my_cursor.execute(sql)
     data = my_cursor.fetchall()
     print(data)
     await state.finish()
@@ -220,7 +269,7 @@ keyboard_inline = InlineKeyboardMarkup()
 for unit_id in range(count_units):
     number = unit_id + 1
     sql = f"SELECT title FROM mydb.unit where id = %s"
-    my_cursor.execute(sql, (number, ))
+    my_cursor.execute(sql, (number,))
     title = my_cursor.fetchone()
     buttons.append(InlineKeyboardButton(text=f'unit {number}: {title[0]}', callback_data=f'unit_{number}'))
     keyboard_inline.add(InlineKeyboardButton(text=f'unit {number}: {title[0]}', callback_data=f'unit_{number}'))
@@ -238,7 +287,8 @@ async def units_id_workmates(message: types.Message):
 
 @dp.callback_query_handler(state=Form.unit_workmates)
 async def unit_workmates(call: types.CallbackQuery, state: FSMContext):
-    await call.message.answer(f"workmates of unit {str(call.data)}")
+    print(call["message"]["reply_markup"]["inline_keyboard"])
+    # await call.message.answer(f"workmates of unit {str(call.text)}")
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
             needed_unit_id = id + 1
@@ -304,14 +354,16 @@ async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
     for id in range(count_units):
         unit_id = id + 1
         if call.data == buttons[id].callback_data:
-            my_cursor.execute(f"""SELECT * from mydb.workmate where unit_ID = {unit_id} 
-            AND id_workmate in (SELECT workmate_id_workmate FROM mydb.sick_document GROUP BY workmate_id_workmate)""")
+            my_cursor.execute(f"""SELECT id_workmate, surname, name, unit_id FROM workmate
+                WHERE id_workmate in (SELECT id FROM sick_document 
+                WHERE workmate_id_workmate in (SELECT id_workmate FROM workmate WHERE 
+                unit_id={unit_id}) AND month_number={currentMonth})""")
             data = my_cursor.fetchall()
             if data:
-                testo_messaggio = message_select_workmates(data)
+                testo_messaggio = message_select_workmates_sickdoc(data)
                 await call.message.answer(testo_messaggio)
             else:
-                text = "No sick documents found inside the database."
+                text = "No sick documents found inside this unit during current month."
                 await call.message.answer(text)
         await state.finish()
 
@@ -352,6 +404,11 @@ async def insert_workmate(message: types.Message, state: FSMContext):
     # the initial NULL is for the AUTOINCREMENT id inside the table
     my_cursor.execute(sql, workmate)  # Execute the query
     db.mydb.commit()  # commit the changes
+
+    my_cursor.execute(f"SELECT count_workmates FROM mydb.unit WHERE id={unit_id}")
+    count_workmates = int(my_cursor.fetchone()[0]) + 1
+    my_cursor.execute(f"UPDATE unit SET count_workmates={count_workmates} WHERE id={unit_id}")
+    db.mydb.commit()  # commit the changes
     await state.finish()
 
     if my_cursor.rowcount < 1:
@@ -389,7 +446,7 @@ async def insert_unit(message: types.Message, state: FSMContext):
 
 
 @dp.message_handler(commands='insert_sick_paper')
-async def insert_workmate(message: types.Message):
+async def insert_sick_paper(message: types.Message):
     try:
         await Form.sick_paper.set()
         await message.answer("""INPUT\nbeginning_disease end_disease workmate's_id\n\n year-month-day\t2023-01-05""")
@@ -401,7 +458,7 @@ async def insert_workmate(message: types.Message):
 
 
 @dp.message_handler(state=Form.sick_paper)
-async def insert_workmate(message: types.Message, state: FSMContext):
+async def insert_sick_paper(message: types.Message, state: FSMContext):
     data_workmate = message.values["text"].split(" ")
     try:
         beginning_disease = data_workmate[0]
@@ -523,7 +580,8 @@ async def update_unit(message: types.Message, state: FSMContext):
 async def update_sick_paper(message: types.Message):
     try:
         await Form.update_sick_paper.set()
-        await message.answer("""INPUT new information\ndocument's_id beginning_disease end_disease\n\n year-month-day\t2023-01-05""")
+        await message.answer(
+            """INPUT new information\ndocument's_id beginning_disease end_disease\n\n year-month-day\t2023-01-05""")
 
     except Exception as e:
         print(e)
@@ -587,9 +645,19 @@ async def delete_workmate(message: types.Message, state: FSMContext):
         await Form.workmate.set()
         return
 
+    my_cursor.execute(f"SELECT unit_id FROM mydb.workmate WHERE id_workmate={id}")
+    unit_id = my_cursor.fetchone()[0]
+
     sql = "DELETE FROM workmate WHERE id_workmate = %s;"
-    my_cursor.execute(sql, (id, ))  # Execute the query
+    my_cursor.execute(sql, (id,))  # Execute the query
+    # db.mydb.commit()  # commit the changes
+
+    my_cursor.execute(f"SELECT count_workmates FROM mydb.unit WHERE id={unit_id}")
+    count_workmates = int(my_cursor.fetchone()[0]) - 1
+    my_cursor.execute(f"UPDATE unit SET count_workmates={count_workmates} WHERE id={unit_id}")
     db.mydb.commit()  # commit the changes
+    await state.finish()
+
     await state.finish()
 
     if my_cursor.rowcount < 1:
