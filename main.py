@@ -69,9 +69,11 @@ async def help(message: types.Message):
     text = f'I can help you manage database of workmates in your office.\n\n' \
            '/start - bot launch, greetings\n/help - a list of all available commands and their ' \
            'purpose \n\nORDINARY SELECT:\n/workmates – a list of all workmates in the office\n' \
-           '/units – a list of all units in the office\n/workmate – select one workmate with written surname or id\n' \
-           '/unit_workmates – a list of all workmates in the unit with choosen id\n/table – table of chosen unit\n' \
-           '/unit_sickdoc - \n\nINSERT COMMANDS:\n/insert_workmate\n/insert_unit\n/insert_sick_paper\n\n' \
+           '/units – a list of all units in the office\n/workmate – select the workmate by the required id or surname\n' \
+           '/unit_workmates – a list of all workmates by the required unit\n/table – table of required unit for the' \
+           ' current month\n/office_sickdoc - a list of workmates, who has sickdoc in the current month, in every unit ' \
+           'in the whole office\n/unit_sickdoc - a list of workmates, who has sickdoc in the current month in ' \
+           'required unit\n\nINSERT COMMANDS:\n/insert_workmate\n/insert_unit\n/insert_sick_paper\n\n' \
            'UPDATE COMMANDS:\n/update_workmate\n/update_unit\n/update_sick_paper\n\nDELETE COMMANDS:\n' \
            '/delete_workmate\n/delete_unit\n/delete_sick_paper\n\n'
     await message.answer(text)
@@ -159,6 +161,7 @@ def message_select_workmates_office_sickdoc(ans):
     message = """Received 📖 Information about office taking into account the units about people who have sickdoc in the current month:\nunit's title | name surname \n\n""" + text
     return message
 
+
 ######
 ###### SELECT COMMANDS
 ######
@@ -218,24 +221,17 @@ async def select_workmate_surname(message: types.Message, state: FSMContext):
     id_data = message.values["text"]
     try:
         surname = id_data.title()
-        print(surname)
     except ValueError:
         await state.finish()
         await message.answer("sorry, you input wrong data type. please, try again")
         await message.answer("Choose needed type of search", reply_markup=keyboard_inline_workmate)
         return
 
-    sql = f'''SELECT *, (SELECT SUM(count_days_disease) sum 
-                        FROM mydb.sick_document 
-                        WHERE workmate_id_workmate in (SELECT id_workmate 
-                                                    FROM mydb.workmate 
-                                                    WHERE surname = {surname}) 
-                                                    AND month_number={currentMonth}
-                        group by workmate_id_workmate ) sick_days 
-                        FROM mydb.workmate WHERE surname = {surname}'''
-    my_cursor.execute(sql)
+    sql = f'''SELECT * FROM workmate
+            INNER JOIN sick_document ON workmate.id_workmate = sick_document.workmate_id_workmate
+            AND workmate.surname = %s'''
+    my_cursor.execute(sql, (surname, ))
     data = my_cursor.fetchall()
-    print(data)
     await state.finish()
     if data:
         testo_messaggio = message_select_workmate(data)
@@ -325,9 +321,9 @@ async def units_id_table(message: types.Message):
 
 @dp.callback_query_handler(state=Form.table)
 async def table(call: types.CallbackQuery, state: FSMContext):
-    my_cursor.execute('SELECT count_work_days FROM mydb.month WHERE month_number = 1')
+    my_cursor.execute(f'SELECT count_work_days FROM mydb.month WHERE month_number = {currentMonth}')
     count_work_days = my_cursor.fetchall()
-    my_cursor.execute('SELECT month_name FROM mydb.month WHERE month_number = 1')
+    my_cursor.execute(f'SELECT month_name FROM mydb.month WHERE month_number = {currentMonth}')
     month = my_cursor.fetchall()
     await call.message.answer(f'{str(call.data)}')
     await call.message.answer(f'month {str(month[0][0])}')
@@ -361,7 +357,7 @@ async def units_id_sickdoc(message: types.Message):
 @dp.callback_query_handler(state=Form.unit_sickdoc)
 async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(f'{str(call.data)}')
-    my_cursor.execute('SELECT month_name FROM mydb.month WHERE month_number = 1')
+    my_cursor.execute(f'SELECT month_name FROM mydb.month WHERE month_number = {currentMonth}')
     month = my_cursor.fetchall()
     await call.message.answer(f'month {str(month[0][0])}')
     for id in range(count_units):
@@ -379,6 +375,7 @@ async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
                 text = "No sick documents found inside this unit during current month."
                 await call.message.answer(text)
         await state.finish()
+
 
 @dp.message_handler(commands='office_sickdoc')
 async def office_sickdoc(message: types.Message):
