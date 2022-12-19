@@ -135,6 +135,7 @@ def message_select_table(ans):
     message = """Received 📖 Information about workmates:\nid | name | surname | sick days | days worked\n\n""" + text
     return message
 
+
 def message_select_workmates_sickdoc(ans):
     text = ""
     for row in ans:
@@ -144,6 +145,18 @@ def message_select_workmates_sickdoc(ans):
 
         text += str(id) + " | " + str(name) + " " + str(surname) + "\n"
     message = """Received 📖 Information about workmates:\nid | name surname \n\n""" + text
+    return message
+
+
+def message_select_workmates_office_sickdoc(ans):
+    text = ""
+    for row in ans:
+        title = row[0]
+        name = row[1]
+        surname = row[2]
+
+        text += str(title) + " | " + str(name) + " " + str(surname) + "\n"
+    message = """Received 📖 Information about office taking into account the units about people who have sickdoc in the current month:\nunit's title | name surname \n\n""" + text
     return message
 
 ######
@@ -366,6 +379,24 @@ async def unit_info_sickdoc(call: types.CallbackQuery, state: FSMContext):
                 text = "No sick documents found inside this unit during current month."
                 await call.message.answer(text)
         await state.finish()
+
+@dp.message_handler(commands='office_sickdoc')
+async def office_sickdoc(message: types.Message):
+    my_cursor.execute(f'SELECT month_name FROM mydb.month WHERE month_number = {currentMonth}')
+    month = my_cursor.fetchall()
+    await message.answer(f'month {str(month[0][0])}')
+    my_cursor.execute(f"""SELECT unit.title, workmate.name, workmate.surname 
+                            FROM unit
+                            INNER JOIN workmate ON unit.id = workmate.unit_id
+                            WHERE workmate.id_workmate in 
+                            (SELECT workmate_id_workmate FROM sick_document where month_number={currentMonth})""")
+    data = my_cursor.fetchall()
+    if data:
+        testo_messaggio = message_select_workmates_office_sickdoc(data)
+        await message.answer(testo_messaggio)
+    else:
+        text = "No sick documents found inside this unit during current month."
+        await message.answer(text)
 
 
 ######
