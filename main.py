@@ -170,7 +170,7 @@ keyboard_inline_workmate = InlineKeyboardMarkup()
 keyboard_inline_workmate.add(InlineKeyboardButton(text="id", callback_data="id"),
                              InlineKeyboardButton(text="surname", callback_data="surname"))
 
-
+# чотири наступні функції шукають співробітника по id або прізвищу, що вписує користувач
 @dp.message_handler(commands='workmate')
 async def workmate(message: types.Message):
     await message.answer("Choose needed type of search", reply_markup=keyboard_inline_workmate)
@@ -240,7 +240,7 @@ async def select_workmate_surname(message: types.Message, state: FSMContext):
         text = "Something went wrong, please try again."
         await message.answer(text)
 
-
+# дві наступні функції видають дані співробітників або відділів
 @dp.message_handler(commands="workmates")
 async def workmates(message: types.Message):
     sql = 'SELECT * FROM workmate'
@@ -296,8 +296,7 @@ async def units_id_workmates(message: types.Message):
 
 @dp.callback_query_handler(state=Form.unit_workmates)
 async def unit_workmates(call: types.CallbackQuery, state: FSMContext):
-    print(call["message"]["reply_markup"]["inline_keyboard"])
-    # await call.message.answer(f"workmates of unit {str(call.text)}")
+    await call.message.answer(f"workmates of {str(call.text)}")
     for id in range(count_units):
         if call.data == buttons[id].callback_data:
             needed_unit_id = id + 1
@@ -678,14 +677,11 @@ async def delete_workmate(message: types.Message, state: FSMContext):
 
     sql = "DELETE FROM workmate WHERE id_workmate = %s;"
     my_cursor.execute(sql, (id,))  # Execute the query
-    # db.mydb.commit()  # commit the changes
 
     my_cursor.execute(f"SELECT count_workmates FROM mydb.unit WHERE id={unit_id}")
     count_workmates = int(my_cursor.fetchone()[0]) - 1
     my_cursor.execute(f"UPDATE unit SET count_workmates={count_workmates} WHERE id={unit_id}")
     db.mydb.commit()  # commit the changes
-    await state.finish()
-
     await state.finish()
 
     if my_cursor.rowcount < 1:
